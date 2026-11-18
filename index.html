@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>공공데이터 교차검증기</title>
+<meta name="description" content="KSPO 공공데이터를 다른 기관 공공데이터와 맞춰 본 주의사항(신뢰도 카드)과 보완 데이터를 제공합니다.">
+<link rel="alternate" type="application/json" href="data/trust.json" title="KSPO 데이터 신뢰도 카드 (kspo-trust-card/0.1)">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* 레이아웃: 위에서 아래로 한 흐름 — 데이터 고르기 → 신뢰도 카드 → 보완 데이터 → 함께 쓸 데이터 → 제보 */
+:root {
+  color-scheme: light;
+  --bg: #f4f6f9;
+  --surface: #ffffff;
+  --sunken: #eef1f5;
+  --ink: #141922;
+  --ink-2: #485263;
+  --ink-3: #6f7889;
+  --line: #dce1e8;
+  --accent: #1d5fc4;
+  --accent-soft: #e4edfb;
+  --high: #c73434;
+  --high-soft: #fbeaea;
+  --mid: #a96300;
+  --mid-soft: #fbf0de;
+  --low: #5b687c;
+  --low-soft: #eceff4;
+  --bar: #c2c8d2;
+  --bar-blue: #2a78d6;
+  --bar-red: #d03b3b;
+  --band: rgba(91, 104, 124, 0.12);
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --radius: 10px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #111419; --surface: #191d24; --sunken: #14181e; --ink: #eceff4; --ink-2: #b6bdc9; --ink-3: #8c94a2;
+    --line: #2b313b; --accent: #6ea3f2; --accent-soft: #1c2a40;
+    --high: #f07272; --high-soft: #3a1f22; --mid: #e3a447; --mid-soft: #3a2d17; --low: #a2adbe; --low-soft: #232933;
+    --bar: #4a515d; --bar-blue: #3987e5; --bar-red: #e05252; --band: rgba(162, 173, 190, 0.12);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111419; --surface: #191d24; --sunken: #14181e; --ink: #eceff4; --ink-2: #b6bdc9; --ink-3: #8c94a2;
+  --line: #2b313b; --accent: #6ea3f2; --accent-soft: #1c2a40;
+  --high: #f07272; --high-soft: #3a1f22; --mid: #e3a447; --mid-soft: #3a2d17; --low: #a2adbe; --low-soft: #232933;
+  --bar: #4a515d; --bar-blue: #3987e5; --bar-red: #e05252; --band: rgba(162, 173, 190, 0.12);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font: 400 15px/1.65 var(--font-body); -webkit-font-smoothing: antialiased; }
+a { color: var(--accent); }
+h1, h2, h3 { text-wrap: balance; margin: 0; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.num, .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+.wrap { max-width: 1040px; margin: 0 auto; padding: 0 20px; }
+header.top { border-bottom: 1px solid var(--line); background: var(--surface); }
+header.top .wrap { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 20px; padding-top: 22px; padding-bottom: 18px; }
+header.top h1 { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+header.top p { margin: 0; color: var(--ink-2); flex: 1 1 360px; }
+header.top nav { display: flex; gap: 14px; font-size: 14px; }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+
+main { display: grid; gap: 34px; padding: 28px 0 56px; }
+section > h2 { font-size: 18px; font-weight: 700; display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+section > h2 .step { font: 500 12px var(--font-mono); color: var(--ink-3); }
+section > .lead { margin: -6px 0 14px; color: var(--ink-2); max-width: 68ch; }
+
+/* 1. 데이터 고르기 */
+.picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+.tile { text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 14px 12px; cursor: pointer; display: grid; gap: 8px; align-content: start; }
+.tile:hover { border-color: var(--ink-3); }
+.tile[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: var(--accent-soft); }
+.tile .t-name { font-weight: 600; line-height: 1.4; }
+.tile .t-meta { font-size: 13px; color: var(--ink-3); }
+.pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.pill { font-size: 12px; font-weight: 600; border-radius: 999px; padding: 1px 8px; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.pill.high { color: var(--high); background: var(--high-soft); }
+.pill.medium { color: var(--mid); background: var(--mid-soft); }
+.pill.low { color: var(--low); background: var(--low-soft); }
+.pill .ico { font-size: 10px; }
+.tile.upload { border-style: dashed; }
+
+/* 2. 신뢰도 카드 */
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+.card-head { padding: 18px 20px 14px; border-bottom: 1px solid var(--line); display: grid; gap: 6px; }
+.card-head h3 { font-size: 20px; font-weight: 700; }
+.facts { display: flex; flex-wrap: wrap; gap: 4px 18px; font-size: 13px; color: var(--ink-2); }
+.facts b { font-weight: 500; color: var(--ink-3); margin-right: 4px; }
+.verdict { font-size: 15px; font-weight: 500; }
+.issues { list-style: none; margin: 0; padding: 0; }
+.issue { display: grid; grid-template-columns: 4px 1fr; border-bottom: 1px solid var(--line); }
+.issue:last-child { border-bottom: 0; }
+.issue .stripe { background: var(--low); }
+.issue.high .stripe { background: var(--high); }
+.issue.medium .stripe { background: var(--mid); }
+.issue .body { padding: 14px 20px 14px 16px; display: grid; gap: 4px; }
+.issue .row1 { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.code { font: 500 12px var(--font-mono); color: var(--ink-2); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
+.issue .title { font-weight: 600; }
+.issue .detail { margin: 0; color: var(--ink); max-width: 72ch; }
+.issue .advice { margin: 0; color: var(--ink-2); font-size: 14px; max-width: 72ch; }
+.issue .advice::before { content: "이렇게 쓰세요 · "; color: var(--ink-3); }
+.issue .tools { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; margin-top: 2px; }
+.issue details { font-size: 13px; color: var(--ink-2); }
+.issue details ul { margin: 6px 0 0; padding-left: 18px; columns: 2 300px; }
+
+.evidence { padding: 16px 20px 18px; border-top: 1px solid var(--line); background: var(--sunken); border-radius: 0 0 var(--radius) var(--radius); }
+.evidence h4 { margin: 0 0 2px; font-size: 15px; font-weight: 600; }
+.evidence .sub { margin: 0 0 10px; font-size: 13px; color: var(--ink-2); }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12.5px; color: var(--ink-2); margin-bottom: 6px; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.chart { position: relative; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart text { fill: var(--ink-3); font: 400 11px var(--font-body); }
+.tip { position: absolute; pointer-events: none; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 12.5px; line-height: 1.5; box-shadow: 0 4px 14px rgba(0,0,0,.12); min-width: 170px; z-index: 2; }
+.tip b { font-weight: 600; }
+.tablev { margin-top: 10px; font-size: 13px; }
+.tablev table { border-collapse: collapse; margin-top: 6px; width: 100%; }
+.tablev th, .tablev td { text-align: left; padding: 4px 10px 4px 0; border-bottom: 1px solid var(--line); }
+.tablev td.r, .tablev th.r { text-align: right; }
+.tablev .scroll { overflow-x: auto; }
+
+/* 업로드 */
+.drop { border: 1.5px dashed var(--line); border-radius: var(--radius); padding: 22px 20px; display: grid; gap: 10px; justify-items: start; background: var(--surface); }
+.drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.drop p { margin: 0; color: var(--ink-2); max-width: 70ch; }
+.btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 7px 14px; font-weight: 500; cursor: pointer; text-decoration: none; color: var(--ink); font-size: 14px; }
+.btn:hover { border-color: var(--ink-3); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+:root[data-theme="dark"] .btn.primary { color: #0b1220; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn.primary { color: #0b1220; } }
+.btnrow { display: flex; flex-wrap: wrap; gap: 8px; }
+.status { font-size: 14px; color: var(--ink-2); }
+.status.err { color: var(--high); }
+
+/* 3·4. 보완 데이터, 함께 쓸 데이터 */
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.dl { padding: 16px 18px; display: grid; gap: 6px; align-content: start; }
+.dl h3 { font-size: 16px; font-weight: 600; }
+.dl p { margin: 0; color: var(--ink-2); font-size: 14px; }
+.dl .cols { font-size: 12.5px; color: var(--ink-3); }
+.dl .btnrow { margin-top: 6px; }
+.empty { color: var(--ink-3); font-size: 14px; padding: 14px 18px; }
+.comp { list-style: none; margin: 0; padding: 0; }
+.comp li { padding: 12px 18px; border-bottom: 1px solid var(--line); display: grid; gap: 2px; }
+.comp li:last-child { border-bottom: 0; }
+.comp .why { color: var(--ink-2); font-size: 14px; }
+
+/* 5. 제보 */
+.report { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; padding: 18px 20px; }
+.report form { display: grid; gap: 12px; align-content: start; }
+.report label { font-size: 13px; font-weight: 600; display: grid; gap: 4px; }
+.report textarea, .report select, .report input { border: 1px solid var(--line); border-radius: 8px; background: var(--bg); padding: 8px 10px; font-size: 14px; font-weight: 400; }
+.report textarea { min-height: 84px; resize: vertical; }
+.report pre { margin: 0; white-space: pre-wrap; word-break: break-word; background: var(--sunken); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; font: 400 13px/1.6 var(--font-body); min-height: 220px; }
+.report .how { font-size: 13px; color: var(--ink-2); margin: 0; }
+@media (max-width: 720px) { .report { grid-template-columns: 1fr; } }
+
+/* 규칙 표 */
+.rules { overflow-x: auto; }
+.rules table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.rules th, .rules td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.rules th { font-size: 12.5px; color: var(--ink-3); font-weight: 600; }
+.rules td.c { white-space: nowrap; }
+footer { border-top: 1px solid var(--line); padding: 20px 0 40px; font-size: 13px; color: var(--ink-3); }
+footer p { margin: 4px 0; max-width: 80ch; }
+.sr:focus-visible + .btn { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <h1>공공데이터 교차검증기</h1>
+    <p>KSPO 공공데이터를 쓰기 전에, 다른 기관 데이터와 맞춰 보고 찾은 주의사항부터 확인하세요.</p>
+    <nav aria-label="바로가기">
+      <button class="linkbtn" type="button" data-jump="sec-rules">검사 규칙</button>
+      <a href="data/trust.json">AI·프로그램용 JSON</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <section id="sec-pick" aria-labelledby="h-pick">
+    <h2 id="h-pick"><span class="step">1</span>데이터 고르기</h2>
+    <p class="lead">검사를 마친 KSPO 데이터를 고르거나, 직접 받은 CSV 파일을 올려 같은 검사를 돌려 보세요.</p>
+    <div class="picker" id="picker" role="group" aria-label="검사할 데이터"></div>
+  </section>
+
+  <section id="sec-card" aria-labelledby="h-card">
+    <h2 id="h-card"><span class="step">2</span>신뢰도 카드</h2>
+    <div id="card"></div>
+  </section>
+
+  <section id="sec-supp" aria-labelledby="h-supp">
+    <h2 id="h-supp"><span class="step">3</span>보완 데이터 내려받기</h2>
+    <p class="lead">빠지거나 믿기 어려운 값을 다른 공공데이터로 채운 파일입니다. 그대로 분석에 쓸 수 있습니다.</p>
+    <div id="supp"></div>
+  </section>
+
+  <section id="sec-comp" aria-labelledby="h-comp">
+    <h2 id="h-comp"><span class="step">4</span>함께 쓰면 좋은 데이터</h2>
+    <p class="lead">이 데이터를 검증하거나 보완할 때 대조한 공공데이터입니다.</p>
+    <div id="comp"></div>
+  </section>
+
+  <section id="sec-report" aria-labelledby="h-report">
+    <h2 id="h-report"><span class="step">5</span>오류 제보</h2>
+    <p class="lead">새로 찾은 오류를 적으면 제보 글을 만들어 드립니다. 이 사이트는 제보를 따로 저장하지 않으니, 복사해서 공공데이터포털 해당 데이터 페이지의 ‘오류신고 및 문의’에 붙여 넣으세요.</p>
+    <div class="card report">
+      <form id="report-form" novalidate>
+        <label for="r-ds">데이터<select id="r-ds"></select></label>
+        <label for="r-what">무엇이 틀렸나요<textarea id="r-what" placeholder="예: 2025-12-20 공연명이 규현으로만 적혀 있고 같은 날 KSPO DOME DAY6 공연이 없습니다."></textarea></label>
+        <label for="r-how">어떻게 확인했나요<textarea id="r-how" placeholder="예: KOPIS 공연 목록, 올림픽공원역 21~23시 승차(연중 최대 12,801명)와 대조했습니다."></textarea></label>
+        <label for="r-who">이름·연락처 (선택)<input id="r-who" type="text" autocomplete="off"></label>
+      </form>
+      <div style="display:grid;gap:10px;align-content:start">
+        <pre id="r-out" aria-live="polite"></pre>
+        <div class="btnrow">
+          <button class="btn primary" type="button" id="r-copy">제보 글 복사</button>
+          <a class="btn" id="r-link" href="https://www.data.go.kr">공공데이터포털에서 오류신고</a>
+        </div>
+        <p class="how" id="r-msg"></p>
+      </div>
+    </div>
+  </section>
+
+  <section id="sec-rules" aria-labelledby="h-rules">
+    <h2 id="h-rules">검사 규칙</h2>
+    <p class="lead">한 데이터 안을 보는 내부 검사(A)와 다른 기관 데이터와 맞춰 보는 교차 검증(B)입니다. 기준값은 <a href="data/rules.json">rules.json</a> 한 파일에서 바꿀 수 있습니다.</p>
+    <div class="card rules" id="rules"></div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>이 서비스는 AI를 호출하지 않습니다. 모든 검사는 정해진 규칙으로 돌아가며, 올린 파일은 브라우저 안에서만 처리하고 어디에도 보내지 않습니다.</p>
+    <p>대조에 쓴 데이터: 한국체육산업개발 올림픽공원 연계 데이터·공연정보·유실물·주차장 혼잡도, 서울교통공사 1~8호선·9호선 2·3단계 역별 시간대별 승하차, 예술경영지원센터 KOPIS 공연목록. 검사일 <span id="checked-at"></span>.</p>
+  </div>
+</footer>
+
+<div class="tip" id="tip" hidden></div>
+<script src="checks.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
