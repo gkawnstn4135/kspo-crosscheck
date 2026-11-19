@@ -1,0 +1,21 @@
+{
+  "schema": "crosscheck-monitor/0.1",
+  "note": "GitHub Actions가 매주 다시 확인하는 API 목록입니다. 새 API를 넣으면(name, page 선택) 신뢰도 카드가 자동으로 생깁니다. secret은 GitHub 저장소 Settings → Secrets에 넣은 인증키 이름이고, url의 {KEY} 자리에 그 키가 들어갑니다. 키는 이 파일과 사이트 어디에도 남지 않습니다.",
+  "apis": [
+    {
+      "dataset": "kspo-linked-2025",
+      "secret": "KCISA_KEY_LINKED",
+      "url": "https://api.kcisa.kr/openapi/API_CPM_009/request?serviceKey={KEY}&numOfRows=10&pageNo=1"
+    },
+    {
+      "dataset": "kspo-lost-api",
+      "secret": "KCISA_KEY_LOST",
+      "url": "https://api.kcisa.kr/openapi/service/rest/meta/KSClost?serviceKey={KEY}&numOfRows=10&pageNo=1"
+    },
+    {
+      "dataset": "kspo-perf-api",
+      "secret": "KCISA_KEY_PERF",
+      "url": "https://api.kcisa.kr/openapi/service/rest/meta/KSCperf?serviceKey={KEY}&numOfRows=10&pageNo=1"
+    }
+  ]
+}

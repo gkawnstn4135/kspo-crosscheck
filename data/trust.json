@@ -15,6 +15,14 @@
       "period": "2025-01-01 ~ 2025-12-31",
       "issues": [
         {
+          "rule": "A8",
+          "severity": "high",
+          "title": "API가 0건을 돌려줌",
+          "detail": "2026-11-19에 문화공공데이터광장 API(API_CPM_009)를 다시 확인하니 정상 응답(resultCode 0000)인데 totalCount가 0이고 목록이 비어 있습니다. 이전 수집 때는 같은 API가 2,419,028건을 돌려줬습니다.",
+          "advice": "지금은 API로 받을 수 없습니다. 예시 파일과 보완 데이터를 쓰고, 다시 열렸는지 나중에 확인하세요.",
+          "auto": true
+        },
+        {
           "rule": "A4",
           "severity": "high",
           "title": "방문객은 실측이 아닌 추정치",
@@ -39,8 +47,8 @@
           "rule": "A8",
           "severity": "high",
           "title": "파일 다운로드본 잘림",
-          "detail": "공공데이터포털 파일 다운로드본은 정확히 100,000행에서 잘려 2025-11-03 ~ 12-31(59일)만 담겨 있습니다. 문화공공데이터광장 API로 받으면 시간대별 기록 7,803건 전체를 받을 수 있습니다.",
-          "advice": "파일 대신 API(API_CPM_009)로 받으세요."
+          "detail": "공공데이터포털 파일 다운로드본은 정확히 100,000행에서 잘려 2025-11-03 ~ 12-31(59일)만 담겨 있습니다.",
+          "advice": "1년치가 필요하면 이 서비스의 예시 파일(이전에 API로 받은 7,803건)과 보완 데이터를 쓰세요."
         },
         {
           "rule": "B2",
@@ -105,7 +113,25 @@
         "2025_올림픽공원_통합공연달력.csv",
         "2025_올림픽공원역_일별_퇴장인파지표.csv"
       ],
-      "url": "https://www.data.go.kr/data/15164822/openapi.do"
+      "url": "https://www.data.go.kr/data/15164822/openapi.do",
+      "monitor": {
+        "checked_at": "2026-11-19",
+        "state": "empty",
+        "total": 0,
+        "latest": null,
+        "history": [
+          {
+            "date": "이전 수집",
+            "state": "ok",
+            "total": 2419028
+          },
+          {
+            "date": "2026-11-19",
+            "state": "empty",
+            "total": 0
+          }
+        ]
+      }
     },
     {
       "id": "kspo-perf-api",
@@ -144,7 +170,20 @@
           "why": "연도·공연장 포함 공식 일정",
           "url": "https://www.kopis.or.kr"
         }
-      ]
+      ],
+      "monitor": {
+        "checked_at": null,
+        "state": "ok",
+        "total": 2502,
+        "latest": null,
+        "history": [
+          {
+            "date": "이전 수집",
+            "state": "ok",
+            "total": 2502
+          }
+        ]
+      }
     },
     {
       "id": "kspo-lost-api",
@@ -166,7 +205,7 @@
           "rule": "A8",
           "severity": "medium",
           "title": "건수 불일치",
-          "detail": "totalCount는 56,176건이지만 게시판 글은 약 300건이고, 표본 100건 중 제목 중복이 16건입니다.",
+          "detail": "totalCount는 56,772건(2026-11-19 확인, 이전 확인 때 56,176건)이지만 게시판 글은 약 300건이고, 표본 100건 중 제목 중복이 16건입니다. 마지막 습득일은 그대로인데 건수만 늘었습니다.",
           "advice": "제목 기준으로 중복을 제거하세요."
         },
         {
@@ -176,7 +215,25 @@
           "detail": "특징 칸이 '색상, 특징 등으로 확인 가능' 같은 고정 문구라 물건 구분에 쓸 수 없습니다.",
           "advice": "품명과 습득 장소만 분석에 쓰세요."
         }
-      ]
+      ],
+      "monitor": {
+        "checked_at": "2026-11-19",
+        "state": "ok",
+        "total": 56772,
+        "latest": null,
+        "history": [
+          {
+            "date": "이전 수집",
+            "state": "ok",
+            "total": 56176
+          },
+          {
+            "date": "2026-11-19",
+            "state": "ok",
+            "total": 56772
+          }
+        ]
+      }
     },
     {
       "id": "kspo-parking-congestion",
@@ -316,5 +373,6 @@
         }
       ]
     }
-  ]
+  ],
+  "monitored_at": "2026-11-19"
 }
