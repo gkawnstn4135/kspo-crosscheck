@@ -60,9 +60,10 @@
     fetch('data/trust.json').then(function (r) { return r.json(); }),
     fetch('data/rules.json').then(function (r) { return r.json(); }),
     fetch('data/calendar_2025.csv').then(function (r) { return r.text(); }),
-    fetch('data/daily_index_2025.csv').then(function (r) { return r.text(); })
+    fetch('data/daily_index_2025.csv').then(function (r) { return r.text(); }),
+    fetch('data/recommend.json').then(function (r) { return r.json(); }).catch(function () { return { rules: [] }; })
   ]).then(function (v) {
-    S.trust = v[0]; S.rules = v[1];
+    S.trust = v[0]; S.rules = v[1]; S.recommend = v[4];
     S.ref = { calendar: Checks.parseRef(v[2]), daily: Checks.parseRef(v[3]) };
     $('#checked-at').textContent = S.trust.checked_at;
     renderPicker(); renderRules(); initReport();
@@ -97,7 +98,7 @@
     var html = S.trust.datasets.map(function (d) {
       return '<button type="button" class="tile" data-id="' + esc(d.id) + '" aria-pressed="false">' +
         '<span class="t-name">' + esc(d.name) + '</span>' +
-        '<span class="t-meta">' + esc(d.provider) + ' · <span class="num">' + fmt(d.rows_checked) + '</span>건 검사</span>' +
+        '<span class="t-meta">' + esc(d.provider) + ' · ' + (d.rows_checked != null ? '<span class="num">' + fmt(d.rows_checked) + '</span>건 검사' : 'API 상태만 자동 확인') + '</span>' +
         '<span class="pills">' + pills(counts(d.issues)) + '</span></button>';
     }).join('');
     html += '<button type="button" class="tile upload" data-id="upload" aria-pressed="false"><span class="t-name">내 파일 검사하기</span>' +
@@ -118,7 +119,7 @@
       f.items.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></details>' : '';
     return '<li class="issue ' + f.severity + '"><span class="stripe" aria-hidden="true"></span><div class="body">' +
       '<div class="row1"><span class="pill ' + f.severity + '"><span class="ico" aria-hidden="true">' + SEV_ICO[f.severity] + '</span>' + SEV[f.severity] + '</span>' +
-      '<span class="code" title="검사 규칙">' + esc(f.rule) + '</span><span class="title">' + esc(f.title) + '</span></div>' +
+      '<span class="code" title="검사 규칙">' + esc(f.rule) + '</span>' + (f.auto ? '<span class="auto" title="매주 자동 재검사가 붙인 항목">자동</span>' : '') + '<span class="title">' + esc(f.title) + '</span></div>' +
       '<p class="detail">' + esc(f.detail) + '</p>' + (f.advice ? '<p class="advice">' + esc(f.advice) + '</p>' : '') + items +
       '<div class="tools"><button class="linkbtn" type="button" data-report="' + i + '">이 문제 제보하기</button></div></div></li>';
   }
@@ -129,14 +130,21 @@
     var html = '<article class="card"><div class="card-head"><h3>' + esc(d.name) + '</h3>' +
       '<div class="facts"><span><b>제공</b>' + esc(d.provider) + '</span>' + (src ? '<span><b>출처</b>' + esc(src) + '</span>' : '') +
       (d.period ? '<span><b>기간</b><span class="num">' + esc(d.period) + '</span></span>' : '') +
-      '<span><b>검사</b><span class="num">' + fmt(d.rows_checked) + '</span>건 · ' + esc(S.trust.checked_at) + '</span>' +
-      (d.url ? '<span><a href="' + esc(d.url) + '">공공데이터포털 원본</a></span>' : '') + '</div>' +
-      '<p class="verdict">' + verdict(c) + '</p><div class="pills">' + pills(c) + '</div></div>' +
+      (d.rows_checked != null ? '<span><b>검사</b><span class="num">' + fmt(d.rows_checked) + '</span>건 · ' + esc(S.trust.checked_at) + '</span>' : '<span><b>검사</b>아직 내용 검사 전, API 상태만 자동 확인</span>') +
+      (d.url ? '<span><a href="' + esc(d.url) + '">공공데이터포털 원본</a></span>' : '') + monitorHTML(d.monitor) + '</div>' +
+      '<p class="verdict">' + (d.rows_checked == null && !d.issues.length ? '아직 내용을 검사하지 않은 데이터입니다. API 상태만 매주 확인합니다.' : verdict(c)) + '</p><div class="pills">' + pills(c) + '</div></div>' +
       '<ul class="issues">' + d.issues.map(issueHTML).join('') + '</ul>' +
       (d.id === 'kspo-linked-2025' ? evidenceHTML() : '') + '</article>';
     $('#card').innerHTML = html;
     bindIssueReport();
     if (d.id === 'kspo-linked-2025') drawChart();
+  }
+  function monitorHTML(m) {
+    if (!m) return '';
+    if (!m.checked_at) return m.last_try ? '<span><b>자동 확인</b><span class="num">' + esc(m.last_try) + '</span> · 확인 실패</span>' : '';
+    var s = m.state === 'empty' ? 'API 0건' : 'API 정상 ' + fmt(m.total) + '건';
+    if (m.last_try && m.last_try > m.checked_at) s += ' · ' + m.last_try + ' 확인 실패';
+    return '<span><b>자동 확인</b><span class="num">' + esc(m.checked_at) + '</span> · ' + esc(s) + '</span>';
   }
   function bindIssueReport() {
     $('#card').querySelectorAll('[data-report]').forEach(function (b) {
@@ -232,7 +240,7 @@
       '<button class="btn" type="button" id="sample">예시 파일로 해보기</button></div>' +
       '<div class="apiform"><label for="apiurl">API 주소로 바로 불러오기</label><div class="apirow"><input id="apiurl" class="field" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://api.kcisa.kr/openapi/…?serviceKey=인증키&amp;numOfRows=1000&amp;pageNo=1">' +
       '<button class="btn" type="button" id="apigo">불러와서 검사</button></div>' +
-      '<p class="hint">인증키가 든 주소는 이 브라우저에서 기관 서버로만 가고, 이 사이트는 저장하지 않습니다. 쪽(pageNo)을 넘기며 최대 20쪽까지 받습니다. 기관 서버가 브라우저 호출을 막으면, 주소를 새 탭에서 열고 결과 화면을 저장(Ctrl+S)해 파일로 올려 주세요.</p></div>' +
+      '<p class="hint">인증키가 든 주소는 이 브라우저에서 기관 서버로만 가고, 이 사이트는 저장하지 않습니다. 쪽(pageNo)을 넘기며 최대 100쪽·10만 건까지 받습니다. numOfRows=1000처럼 크게 넣으면 더 빨리 받습니다. 기관 서버가 브라우저 호출을 막으면, 주소를 새 탭에서 열고 결과 화면을 저장(Ctrl+S)해 파일로 올려 주세요.</p></div>' +
       '<p class="status" id="ustatus" aria-live="polite">예시 파일은 KSPO 올림픽공원 2025 연계 데이터 7,803건(API 수집본)입니다.</p></div><div id="uresult"></div>';
     var drop = $('#drop');
     $('#file').addEventListener('change', function (e) { if (e.target.files[0]) readFile(e.target.files[0]); });
@@ -258,12 +266,16 @@
     }
     S.upload = null; $('#uresult').innerHTML = '';
     var pageKey = ['pageNo', 'cpage', 'page'].find(function (k) { return u.searchParams.has(k); }) || 'pageNo';
-    var first = +(u.searchParams.get(pageKey) || 1), all = [], meta = null, kind = null, MAX = 20, t0 = Date.now();
+    var first = +(u.searchParams.get(pageKey) || 1), all = [], meta = null, kind = null, MAX = 100, ROWS = 100000, t0 = Date.now();
     var name = (u.hostname + u.pathname).replace(/\/+$/, '') + ' API 응답';
     function page(i) {
       u.searchParams.set(pageKey, first + i);
       status('API 불러오는 중… ' + (i + 1) + '쪽' + (all.length ? ', ' + fmt(all.length) + (meta && meta.totalCount ? ' / ' + fmt(+meta.totalCount) : '') + '건' : ''));
-      return fetch(u.toString()).then(function (r) { if (!r.ok) throw new Error('서버가 ' + r.status + ' 오류를 돌려줬습니다.'); return r.arrayBuffer(); })
+      return fetch(u.toString()).then(function (r) {
+          if (r.status === 401 || r.status === 403) throw new Error('서버가 ' + r.status + ' 오류를 돌려줬습니다. 서버는 이 사이트의 호출을 받았지만 인증키가 맞지 않습니다. 이 API를 신청할 때 받은 키인지 확인하세요.');
+          if (!r.ok) throw new Error('서버가 ' + r.status + ' 오류를 돌려줬습니다.');
+          return r.arrayBuffer();
+        })
         .then(function (b) {
           var a = Checks.parseApi(Checks.decode(b).text);
           if (!a) throw new Error('응답이 XML·JSON이 아닙니다. 주소를 확인하세요.');
@@ -272,11 +284,11 @@
           if (!meta) { meta = a.meta; kind = a.kind; }
           all = all.concat(a.objs);
           var total = +meta.totalCount || 0;
-          if (a.objs.length && total && all.length < total && i + 1 < MAX) return page(i + 1);
+          if (a.objs.length && total && all.length < total && i + 1 < MAX && all.length < ROWS) return page(i + 1);
         });
     }
     page(0).then(function () {
-      if (!all.length) throw new Error('받은 목록이 없습니다.');
+      if (!all.length) throw new Error(meta && meta.totalCount === '0' ? '받은 목록이 없습니다. 서버는 이 사이트의 호출을 받아 정상 응답했지만 데이터가 0건입니다(totalCount 0). 기관 쪽에서 데이터를 비웠거나 교체 중일 수 있습니다.' : '받은 목록이 없습니다.');
       done(Checks.runRows(Checks.toRows(all), name, S.rules, S.ref, { kind: kind, meta: meta, encoding: 'UTF-8', t0: t0 }), name);
     }).catch(function (e) {
       var blocked = e instanceof TypeError;
@@ -294,7 +306,7 @@
     rd.readAsArrayBuffer(f);
   }
   function done(res, name) {
-    S.upload = res; showResult(res);
+    S.upload = res; showResult(res); renderComp();
     status(name + ' 검사를 마쳤습니다 (' + (res.ms / 1000).toFixed(1) + '초).');
   }
   function onMain(buf, name) { // Worker를 못 쓰는 환경용
@@ -363,8 +375,16 @@
   /* ---------- 4. 함께 쓸 데이터 ---------- */
   function renderComp() {
     var d = S.trust.datasets.find(function (x) { return x.id === S.current; });
+    if (S.current === 'upload') {
+      if (!S.upload) { $('#comp').innerHTML = '<div class="card empty">파일을 검사하면 열 구성을 보고 함께 맞춰 볼 데이터를 추천합니다.</div>'; return; }
+      var recs = Checks.recommend(S.upload, S.recommend);
+      $('#comp').innerHTML = recs.length ? '<ul class="card comp">' + recs.map(function (r) {
+        return '<li><span><a href="' + esc(r.url) + '">' + esc(r.name) + '</a></span><span class="why">' + esc(r.why) + '</span>' +
+          '<span class="because">이 파일의 ‘' + r.because.map(esc).join('’, ‘') + '’ 열을 보고 추천</span></li>';
+      }).join('') + '</ul>' : '<div class="card empty">이 파일의 열 구성에 맞는 추천 규칙이 아직 없습니다. 함께 볼 만한 데이터를 알면 아래에서 제보해 주세요.</div>';
+      return;
+    }
     var list = d && d.companions ? d.companions : [];
-    if (S.current === 'upload') list = S.trust.datasets[0].companions;
     $('#comp').innerHTML = list.length ? '<ul class="card comp">' + list.map(function (c) {
       return '<li><span>' + (c.url ? '<a href="' + esc(c.url) + '">' + esc(c.name) + '</a>' : esc(c.name)) + '</span><span class="why">' + esc(c.why) + '</span></li>';
     }).join('') + '</ul>' : '<div class="card empty">이 데이터와 대조할 공공데이터를 아직 찾지 못했습니다. 아는 데이터가 있으면 아래에서 제보해 주세요.</div>';

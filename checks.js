@@ -227,7 +227,7 @@
     var cols = profile(table, R);
     var pt = primaryTime(cols, table);
     var label = ctx.multi ? '[' + table.name + '] ' : '';
-    var info = { name: table.name, rows: n, columns: table.headers.length, period: null, hourly: false };
+    var info = { name: table.name, rows: n, columns: table.headers.length, period: null, hourly: false, columnNames: table.headers.slice(0, 200) };
 
     // 기간
     var days = [];
@@ -458,11 +458,23 @@
     if (ent.length) out.push(finding('A6', 'low', label + 'HTML 기호가 그대로 남은 값',
       ent.join(', ') + '(예: ' + entEx.slice(0, 60) + '). ‘&lt;’는 ‘<’로 바꿔 읽어야 합니다.'));
     // 목록형 데이터: 같은 이름 반복, 빈 연도
+    // 같은 제목 반복: 목록형 데이터의 이름 열, 또는 긴 글 제목 열(‘20251207 입출차정보’ 같은 날짜 붙은 꼬리표는 제외)
+    var titleCol = (info.catalog && nameCol) || cols.find(function (c) {
+      if (!/제목|title/i.test(c.name) || c.isNum || c.isDate || c.nonEmpty < 50) return false;
+      var len = 0, tag = 0, k = 0;
+      for (var i = 0; i < n && k < 2000; i++) { var v = c.vals[i]; if (!v) continue; k++; len += v.length; if (/^\d{6,8}\s/.test(v)) tag++; }
+      return k && len / k >= 12 && tag / k < 0.5;
+    });
+    if (titleCol) {
+      var cnt2 = {}, dup2 = 0, dupEx = '', top2 = '', topN = 0;
+      titleCol.vals.forEach(function (v) { if (!v) return; cnt2[v] = (cnt2[v] || 0) + 1; if (cnt2[v] === 2) { dup2++; if (!dupEx) dupEx = v; } if (cnt2[v] > topN) { topN = cnt2[v]; top2 = v; } });
+      var uniq2 = Object.keys(cnt2).length, avg2 = titleCol.nonEmpty / (uniq2 || 1);
+      if (dup2 && dup2 / n < 0.1 && avg2 < 2) out.push(finding('A2', 'low', label + '같은 ‘' + titleCol.name + '’ 반복',
+        '같은 ‘' + titleCol.name + '’이 두 번 이상 나오는 항목이 ' + fmt(dup2) + '개 있습니다(예: ' + dupEx.slice(0, 60) + '). 중복 등록인지 확인하세요.'));
+      else if (dup2 && avg2 >= 2) out.push(finding('A2', avg2 >= 10 ? 'medium' : 'low', label + '같은 ‘' + titleCol.name + '’이 여러 번 나옴',
+        fmt(titleCol.nonEmpty) + '행 중 서로 다른 ‘' + titleCol.name + '’은 ' + fmt(uniq2) + '개뿐이라 하나가 평균 ' + avg2.toFixed(1) + '번 나옵니다(가장 많은 것: ‘' + top2.slice(0, 40) + '’ ' + fmt(topN) + '번). 정기적으로 반복되는 항목인지, 같은 글이 중복 등록된 것인지 확인하세요.'));
+    }
     if (info.catalog && nameCol) {
-      var cnt2 = {}, dup2 = 0, dupEx = '';
-      nameCol.vals.forEach(function (v) { if (!v) return; cnt2[v] = (cnt2[v] || 0) + 1; if (cnt2[v] === 2) { dup2++; if (!dupEx) dupEx = v; } });
-      if (dup2 && dup2 / n < 0.1) out.push(finding('A2', 'low', label + '같은 ‘' + nameCol.name + '’ 반복',
-        '같은 ‘' + nameCol.name + '’이 두 번 이상 나오는 항목이 ' + fmt(dup2) + '개 있습니다(예: ' + dupEx.slice(0, 60) + '). 중복 등록인지 확인하세요.'));
       if (pt && p1y) {
         var yc = {}; pt.stamps.forEach(function (st) { if (st) yc[st.day.slice(0, 4)] = (yc[st.day.slice(0, 4)] || 0) + 1; });
         var ys = Object.keys(yc).map(Number).filter(function (y) { return y >= p1y && y < 2100; }).sort(), gaps = [];
@@ -531,6 +543,14 @@
         }
       }
     }
+    // (가) 교차 검증 기준 데이터(현재 2025년)가 없는 기간이면 건너뛴 사실을 알림
+    if (!ctx.partial && ref && pt && evCol && info.period) {
+      var r0 = ref.daily[0].날짜, r1 = ref.daily[ref.daily.length - 1].날짜, ry = r0.slice(0, 4) === r1.slice(0, 4) ? r0.slice(0, 4) + '년' : r0 + ' ~ ' + r1;
+      if (info.period[1] < r0 || info.period[0] > r1) out.push(finding('안내', 'low', label + '교차 검증을 하지 못함',
+        '교차 검증용 기준 데이터(KOPIS 공연 달력, 올림픽공원역 승하차 지표)는 지금 ' + ry + '치만 있어, 이 데이터(' + info.period[0] + ' ~ ' + info.period[1] + ')의 B 검사(공연 누락, 인파 급증일, 규모, 날짜 대조)는 건너뛰었습니다. 문제가 없다는 뜻이 아닙니다.'));
+      else if (info.period[0] < r0 || info.period[1] > r1) out.push(finding('안내', 'low', label + '교차 검증은 일부 기간만',
+        '교차 검증용 기준 데이터는 지금 ' + ry + '치만 있어, 이 데이터(' + info.period[0] + ' ~ ' + info.period[1] + ') 중 그 기간만 B 검사를 했습니다.'));
+    }
     // B3 목록형 공연 데이터: 날짜가 KOPIS 공연 기간과 맞는지
     if (!ctx.partial && info.catalog && ref && pt && evCol) {
       var mt = makeMatcher(R), kop = ref.calendar.filter(function (e) { return e.KOPIS === 'True'; });
@@ -558,6 +578,7 @@
       }
       if (matched >= 5) info.kopisFound = found.size;
     }
+    info.hasDate = !!pt;
     info.findings = out.length;
     return { info: info, findings: out };
   }
@@ -575,6 +596,7 @@
     return String(v).replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/<[^>]+>/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
       .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#(\d+);/g, function (m, c) { return String.fromCharCode(+c); }).replace(/&amp;/g, '&').trim();
   }
+  function clip(v) { v = String(v); return v.length > 1000 ? v.slice(0, 1000) + '…' : v; } // 긴 본문(HTML 등)은 잘라서 메모리를 아낌
   function toRows(objs) {
     var headers = [], idx = {};
     objs.forEach(function (o) { Object.keys(o).forEach(function (k) { if (!(k in idx)) { idx[k] = headers.length; headers.push(k); } }); });
@@ -592,7 +614,7 @@
     if (!best) return { objs: [], meta: meta };
     var objs = best.map(function (b) {
       var o = {}, re = /<([A-Za-z_][\w.\-]*)(?:\s[^>]*)?(?:\/>|>([\s\S]*?)<\/\1>)/g, m;
-      while ((m = re.exec(b))) if (m[1] !== 'script') o[m[1]] = unent(m[2] || '');
+      while ((m = re.exec(b))) if (m[1] !== 'script') o[m[1]] = clip(unent(m[2] || ''));
       return o;
     });
     return { objs: objs, meta: meta };
@@ -616,7 +638,7 @@
       Object.keys(x).forEach(function (k) {
         var v = x[k];
         if (v && typeof v === 'object' && !Array.isArray(v)) Object.keys(v).forEach(function (s2) { o[k + '.' + s2] = v[s2] && typeof v[s2] === 'object' ? JSON.stringify(v[s2]) : v[s2]; });
-        else o[k] = Array.isArray(v) ? v.join(', ') : v;
+        else o[k] = Array.isArray(v) ? clip(v.join(', ')) : typeof v === 'string' ? clip(v) : v;
       });
       return o;
     });
@@ -649,7 +671,7 @@
     var api = parseApi(dec.text);
     if (api) {
       var err = apiError(api.meta);
-      if (!api.objs.length) throw new Error(err ? 'API가 오류를 돌려줬습니다: ' + err + '. 인증키와 주소를 확인하세요.' : (+api.meta.totalCount > 0 ? 'API가 빈 목록을 돌려줬습니다(전체 ' + fmt(+api.meta.totalCount) + '건, ' + (api.meta.pageNo || '?') + '쪽). pageNo가 너무 크지 않은지 확인하세요.' : 'API 응답에서 목록(item)을 찾지 못했습니다.'));
+      if (!api.objs.length) throw new Error(err ? 'API가 오류를 돌려줬습니다: ' + err + '. 인증키와 주소를 확인하세요.' : (+api.meta.totalCount > 0 ? 'API가 빈 목록을 돌려줬습니다(전체 ' + fmt(+api.meta.totalCount) + '건, ' + (api.meta.pageNo || '?') + '쪽). pageNo가 너무 크지 않은지 확인하세요.' : api.meta.totalCount === '0' ? 'API가 정상 응답했지만 데이터가 0건입니다(totalCount 0). 기관 쪽에서 데이터를 비웠거나 교체 중일 수 있습니다.' : 'API 응답에서 목록(item)을 찾지 못했습니다.'));
       return runRows(toRows(api.objs), fileName, R, ref, { today: opts.today, t0: t0, encoding: dec.encoding, kind: api.kind, meta: api.meta });
     }
     var rows = parseCSV(dec.text, R.thresholds.max_rows || 300000);
@@ -707,6 +729,20 @@
     return { file: fileName, encoding: (opts.kind && opts.kind !== 'CSV' ? 'API ' + opts.kind + ' · ' : '') + opts.encoding, rows: total, tables: tables, findings: findings, ms: Date.now() - t0 };
   }
 
+  /* 열 이름을 보고 함께 맞춰 볼 데이터 추천 (규칙은 data/recommend.json) */
+  function recommend(result, RC) {
+    var out = [];
+    (RC && RC.rules || []).forEach(function (rule) {
+      var re = new RegExp(rule.cols, 'i'), hit = [];
+      result.tables.forEach(function (t) {
+        if (rule.need_date && !t.hasDate) return;
+        (t.columnNames || []).forEach(function (c) { if (re.test(c) && hit.indexOf(c) < 0) hit.push(c); });
+      });
+      if (hit.length) out.push({ id: rule.id, name: rule.name, why: rule.why, url: rule.url, because: hit.slice(0, 4) });
+    });
+    return out;
+  }
+
   /* trust-card 형식으로 내보내기 (AI·프로그램용) */
   function toTrustCard(result) {
     return {
@@ -722,5 +758,5 @@
     return rows.slice(1).map(function (r) { var o = {}; h.forEach(function (k, i) { o[k] = r[i]; }); return o; });
   }
 
-  return { decode: decode, parseCSV: parseCSV, parseRef: parseRef, parseApi: parseApi, apiError: apiError, toRows: toRows, run: run, runRows: runRows, toTrustCard: toTrustCard, makeMatcher: makeMatcher };
+  return { decode: decode, parseCSV: parseCSV, parseRef: parseRef, parseApi: parseApi, apiError: apiError, recommend: recommend, toRows: toRows, run: run, runRows: runRows, toTrustCard: toTrustCard, makeMatcher: makeMatcher };
 });
