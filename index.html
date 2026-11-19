@@ -70,7 +70,8 @@ header.top p { margin: 0; color: var(--ink-2); flex: 1 1 360px; }
 header.top nav { display: flex; gap: 14px; font-size: 14px; }
 .linkbtn { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
 
-main { display: grid; gap: 34px; padding: 28px 0 56px; }
+main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 34px; padding: 28px 0 56px; }
+main > section, .card, .report > * { min-width: 0; }
 section > h2 { font-size: 18px; font-weight: 700; display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
 section > h2 .step { font: 500 12px var(--font-mono); color: var(--ink-3); }
 section > .lead { margin: -6px 0 14px; color: var(--ink-2); max-width: 68ch; }
@@ -141,6 +142,12 @@ section > .lead { margin: -6px 0 14px; color: var(--ink-2); max-width: 68ch; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn.primary { color: #0b1220; } }
 .btnrow { display: flex; flex-wrap: wrap; gap: 8px; }
 .status { font-size: 14px; color: var(--ink-2); }
+.apiform { display: grid; gap: 6px; width: 100%; padding-top: 10px; border-top: 1px solid var(--line); }
+.apiform label { font-size: 13px; font-weight: 600; }
+.apirow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.field { border: 1px solid var(--line); border-radius: 8px; background: var(--bg); padding: 8px 10px; font-size: 14px; width: 100%; min-width: 0; }
+.hint { font-size: 12.5px; color: var(--ink-3); margin: 0; }
+@media (max-width: 520px) { .apirow { grid-template-columns: minmax(0, 1fr); } }
 .status.err { color: var(--high); }
 
 /* 3·4. 보완 데이터, 함께 쓸 데이터 */
@@ -164,7 +171,9 @@ section > .lead { margin: -6px 0 14px; color: var(--ink-2); max-width: 68ch; }
 .report textarea { min-height: 84px; resize: vertical; }
 .report pre { margin: 0; white-space: pre-wrap; word-break: break-word; background: var(--sunken); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; font: 400 13px/1.6 var(--font-body); min-height: 220px; }
 .report .how { font-size: 13px; color: var(--ink-2); margin: 0; }
-@media (max-width: 720px) { .report { grid-template-columns: 1fr; } }
+@media (max-width: 720px) { .report { grid-template-columns: minmax(0, 1fr); } }
+.report textarea, .report select, .report input { width: 100%; min-width: 0; max-width: 100%; }
+.report label, .report form { min-width: 0; }
 
 /* 규칙 표 */
 .rules { overflow-x: auto; }
@@ -186,7 +195,7 @@ footer p { margin: 4px 0; max-width: 80ch; }
     <p>KSPO 공공데이터를 쓰기 전에, 다른 기관 데이터와 맞춰 보고 찾은 주의사항부터 확인하세요.</p>
     <nav aria-label="바로가기">
       <button class="linkbtn" type="button" data-jump="sec-rules">검사 규칙</button>
-      <a href="data/trust.json">AI·프로그램용 JSON</a>
+      <a href="data/trust.json">AI용 신뢰도 카드 파일</a>
     </nav>
   </div>
 </header>

@@ -101,7 +101,7 @@
         '<span class="pills">' + pills(counts(d.issues)) + '</span></button>';
     }).join('');
     html += '<button type="button" class="tile upload" data-id="upload" aria-pressed="false"><span class="t-name">내 파일 검사하기</span>' +
-      '<span class="t-meta">CSV를 올리면 브라우저 안에서 같은 규칙으로 검사합니다</span></button>';
+      '<span class="t-meta">CSV·API 결과(XML·JSON)를 올리거나 API 주소를 넣으면 같은 규칙으로 검사합니다</span></button>';
     $('#picker').innerHTML = html;
     $('#picker').addEventListener('click', function (e) { var t = e.target.closest('.tile'); if (t) go(t.dataset.id); });
   }
@@ -178,7 +178,7 @@
     if (gi.length) {
       var gx0 = m.l + gi[0] * bw, gx1 = m.l + (gi[gi.length - 1] + 1) * bw;
       s += '<rect x="' + gx0 + '" y="' + m.t + '" width="' + (gx1 - gx0) + '" height="' + ph + '" fill="var(--band)"/>' +
-        '<text x="' + (gx0 + 6) + '" y="' + (m.t + 13) + '">KSPO 기록 공백</text>';
+        '<text x="' + (gx1 - 4) + '" y="' + (m.t + 13) + '" text-anchor="end">KSPO 기록 공백</text>';
     }
     for (var t = 0; t <= top; t += step) {
       s += '<line x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + y(t) + '" y2="' + y(t) + '" stroke="var(--line)" stroke-width="1"/>' +
@@ -227,15 +227,20 @@
 
   /* ---------- 내 파일 검사 ---------- */
   function renderUpload() {
-    $('#card').innerHTML = '<div class="drop" id="drop"><p><b>CSV 파일을 여기에 끌어다 놓거나 고르세요.</b> 공공데이터포털·문화공공데이터광장에서 받은 파일을 그대로 올리면 됩니다. UTF-8과 EUC-KR 모두 읽고, ‘이름:값’으로 묶인 칸은 풀어서 검사합니다.</p>' +
-      '<div class="btnrow"><input id="file" class="sr" type="file" accept=".csv,.txt,text/csv"><label class="btn primary" for="file">파일 고르기</label>' +
+    $('#card').innerHTML = '<div class="drop" id="drop"><p><b>파일을 여기에 끌어다 놓거나 고르세요.</b> 공공데이터포털·문화공공데이터광장에서 받은 CSV, 또는 API 결과를 저장한 XML·JSON을 그대로 올리면 됩니다. UTF-8과 EUC-KR 모두 읽고, ‘이름:값’으로 묶인 칸은 풀어서 검사합니다. 30만 행이 넘는 파일은 앞부분만 검사합니다.</p>' +
+      '<div class="btnrow"><input id="file" class="sr" type="file" accept=".csv,.txt,.xml,.json,text/csv,application/xml,application/json"><label class="btn primary" for="file">파일 고르기</label>' +
       '<button class="btn" type="button" id="sample">예시 파일로 해보기</button></div>' +
+      '<div class="apiform"><label for="apiurl">API 주소로 바로 불러오기</label><div class="apirow"><input id="apiurl" class="field" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://api.kcisa.kr/openapi/…?serviceKey=인증키&amp;numOfRows=1000&amp;pageNo=1">' +
+      '<button class="btn" type="button" id="apigo">불러와서 검사</button></div>' +
+      '<p class="hint">인증키가 든 주소는 이 브라우저에서 기관 서버로만 가고, 이 사이트는 저장하지 않습니다. 쪽(pageNo)을 넘기며 최대 20쪽까지 받습니다. 기관 서버가 브라우저 호출을 막으면, 주소를 새 탭에서 열고 결과 화면을 저장(Ctrl+S)해 파일로 올려 주세요.</p></div>' +
       '<p class="status" id="ustatus" aria-live="polite">예시 파일은 KSPO 올림픽공원 2025 연계 데이터 7,803건(API 수집본)입니다.</p></div><div id="uresult"></div>';
     var drop = $('#drop');
     $('#file').addEventListener('change', function (e) { if (e.target.files[0]) readFile(e.target.files[0]); });
     ['dragenter', 'dragover'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add('over'); }); });
     ['dragleave', 'drop'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.remove('over'); }); });
     drop.addEventListener('drop', function (e) { var f = e.dataTransfer.files[0]; if (f) readFile(f); });
+    $('#apigo').addEventListener('click', function () { fetchApi($('#apiurl').value.trim()); });
+    $('#apiurl').addEventListener('keydown', function (e) { if (e.key === 'Enter') fetchApi($('#apiurl').value.trim()); });
     $('#sample').addEventListener('click', function () {
       status('예시 파일을 불러오는 중…');
       fetch('data/sample_linked_2025.csv').then(function (r) { return r.arrayBuffer(); })
@@ -244,24 +249,72 @@
     });
     if (S.upload) showResult(S.upload);
   }
+  /* API 주소로 불러오기: 쪽을 넘기며 받은 뒤 한 표로 합쳐 검사 */
+  function fetchApi(url) {
+    var u;
+    try { u = new URL(url); } catch (e) { status('주소 형식이 맞지 않습니다. https://로 시작하는 전체 주소를 붙여 넣으세요.', true); return; }
+    if (location.protocol === 'https:' && u.protocol === 'http:') {
+      status('http로 시작하는 API(KOPIS 등)는 보안 때문에 이 사이트에서 부를 수 없습니다. 주소를 새 탭에서 열고 결과를 저장해 파일로 올려 주세요.', true); return;
+    }
+    S.upload = null; $('#uresult').innerHTML = '';
+    var pageKey = ['pageNo', 'cpage', 'page'].find(function (k) { return u.searchParams.has(k); }) || 'pageNo';
+    var first = +(u.searchParams.get(pageKey) || 1), all = [], meta = null, kind = null, MAX = 20, t0 = Date.now();
+    var name = (u.hostname + u.pathname).replace(/\/+$/, '') + ' API 응답';
+    function page(i) {
+      u.searchParams.set(pageKey, first + i);
+      status('API 불러오는 중… ' + (i + 1) + '쪽' + (all.length ? ', ' + fmt(all.length) + (meta && meta.totalCount ? ' / ' + fmt(+meta.totalCount) : '') + '건' : ''));
+      return fetch(u.toString()).then(function (r) { if (!r.ok) throw new Error('서버가 ' + r.status + ' 오류를 돌려줬습니다.'); return r.arrayBuffer(); })
+        .then(function (b) {
+          var a = Checks.parseApi(Checks.decode(b).text);
+          if (!a) throw new Error('응답이 XML·JSON이 아닙니다. 주소를 확인하세요.');
+          var err = Checks.apiError(a.meta);
+          if (err && !a.objs.length) throw new Error('API가 오류를 돌려줬습니다: ' + err + '. 인증키와 주소를 확인하세요.');
+          if (!meta) { meta = a.meta; kind = a.kind; }
+          all = all.concat(a.objs);
+          var total = +meta.totalCount || 0;
+          if (a.objs.length && total && all.length < total && i + 1 < MAX) return page(i + 1);
+        });
+    }
+    page(0).then(function () {
+      if (!all.length) throw new Error('받은 목록이 없습니다.');
+      done(Checks.runRows(Checks.toRows(all), name, S.rules, S.ref, { kind: kind, meta: meta, encoding: 'UTF-8', t0: t0 }), name);
+    }).catch(function (e) {
+      var blocked = e instanceof TypeError;
+      status(blocked ? '브라우저에서 이 API를 바로 부를 수 없습니다(기관 서버가 막았거나 네트워크 문제). 주소를 새 탭에서 열고, 결과 화면을 저장(Ctrl+S)한 뒤 그 파일을 올려 주세요.' : e.message, true);
+    });
+  }
   function status(t, err) { var s = $('#ustatus'); if (s) { s.textContent = t; s.className = 'status' + (err ? ' err' : ''); } }
   function readFile(f) {
-    if (!/\.(csv|txt)$/i.test(f.name)) { status('CSV 파일만 검사할 수 있습니다. 엑셀 파일이면 CSV로 저장해서 올려 주세요.', true); return; }
+    if (!/\.(csv|txt|xml|json)$/i.test(f.name)) { status('CSV, XML, JSON 파일만 검사할 수 있습니다. 엑셀 파일이면 CSV로 저장해서 올려 주세요.', true); return; }
+    if (f.size > 200 * 1024 * 1024) { status('200MB가 넘는 파일은 브라우저에서 검사하기 어렵습니다. 기간을 나눠 받은 파일을 올려 주세요.', true); return; }
     status(f.name + ' 읽는 중… (' + fmt(Math.round(f.size / 1024)) + 'KB)');
     var rd = new FileReader();
     rd.onload = function () { analyze(rd.result, f.name); };
     rd.onerror = function () { status('파일을 읽지 못했습니다. 다시 골라 주세요.', true); };
     rd.readAsArrayBuffer(f);
   }
-  function analyze(buf, name) {
-    status(name + ' 검사 중…');
+  function done(res, name) {
+    S.upload = res; showResult(res);
+    status(name + ' 검사를 마쳤습니다 (' + (res.ms / 1000).toFixed(1) + '초).');
+  }
+  function onMain(buf, name) { // Worker를 못 쓰는 환경용
     setTimeout(function () {
-      try {
-        var res = Checks.run(buf, name, S.rules, S.ref);
-        S.upload = res; showResult(res);
-        status(name + ' 검사를 마쳤습니다 (' + (res.ms / 1000).toFixed(1) + '초).');
-      } catch (e) { status('검사하지 못했습니다: ' + e.message, true); }
+      try { done(Checks.run(buf, name, S.rules, S.ref), name); }
+      catch (e) { status('검사하지 못했습니다: ' + e.message, true); }
     }, 30);
+  }
+  function analyze(buf, name) {
+    S.upload = null; $('#uresult').innerHTML = '';
+    status(name + ' 검사 중… 큰 파일은 몇 초 걸립니다.');
+    var w;
+    try { w = new Worker('worker.js'); } catch (e) { return onMain(buf, name); }
+    var settled = false;
+    w.onmessage = function (e) {
+      settled = true; w.terminate();
+      if (e.data.ok) done(e.data.res, name); else status('검사하지 못했습니다: ' + e.data.msg, true);
+    };
+    w.onerror = function (e) { if (settled) return; settled = true; e.preventDefault(); w.terminate(); onMain(buf, name); };
+    w.postMessage({ buf: buf, name: name, rules: S.rules, ref: S.ref });
   }
   function showResult(res) {
     var c = counts(res.findings);
@@ -300,9 +353,9 @@
       return '<div class="card dl"><h3>' + esc(s.title) + '</h3><p>' + esc(s.text) + '</p><p class="cols">열: ' + esc(s.cols) + '</p>' +
         '<div class="btnrow"><a class="btn primary" href="' + s.file + '" download="' + esc(name) + '" data-save="' + esc(name) + '">CSV 내려받기</a></div></div>';
     }).join('');
-    cards += '<div class="card dl"><h3>신뢰도 카드 JSON</h3><p>위 주의사항을 AI와 프로그램이 읽는 형식(kspo-trust-card/0.1)으로 담았습니다. AI에게 KSPO 데이터를 맡길 때 함께 주면 추정치나 빠진 기간을 스스로 경고하게 할 수 있습니다.</p>' +
-      '<p class="cols">데이터 ' + S.trust.datasets.length + '종 · 문제마다 rule, severity, title, detail, advice</p>' +
-      '<div class="btnrow"><a class="btn" href="data/trust.json" download="KSPO_신뢰도카드.json" data-save="KSPO_신뢰도카드.json">JSON 내려받기</a></div></div>';
+    cards += '<div class="card dl"><h3>신뢰도 카드 파일 (AI용)</h3><p>위 주의사항을 한 파일에 담았습니다. ChatGPT 같은 AI에게 KSPO 데이터를 분석시킬 때 이 파일도 함께 올리면, AI가 “방문객은 추정치” 같은 주의사항을 참고해서 답합니다.</p>' +
+      '<p class="cols">검사한 KSPO 데이터 ' + S.trust.datasets.length + '종의 주의사항 전부 · JSON 형식</p>' +
+      '<div class="btnrow"><a class="btn" href="data/trust.json" download="KSPO_신뢰도카드.json" data-save="KSPO_신뢰도카드.json">파일 내려받기</a></div></div>';
     if (!list.length && S.current !== 'upload') cards = '<div class="card empty">이 데이터는 아직 보완 파일이 없습니다. 주의사항을 참고해 쓰세요.</div>' + cards;
     $('#supp').innerHTML = '<div class="grid2">' + cards + '</div>';
   }

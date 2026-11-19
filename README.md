@@ -13,7 +13,7 @@ KSPO(한국체육산업개발) 공공데이터를 쓰기 전에, 다른 기관 �
 | 파일 | 내용 |
 |---|---|
 | `index.html`, `app.js` | 화면 |
-| `checks.js` | 검사 엔진 (브라우저·node 공용). 올린 파일은 브라우저 안에서만 처리 |
+| `checks.js`, `worker.js` | 검사 엔진 (브라우저·node 공용). 올린 파일은 브라우저 안에서만 처리, 큰 파일은 worker에서 검사 |
 | `data/rules.json` | 검사 규칙과 기준값. 이 파일만 고치면 기준이 바뀜 |
 | `data/trust.json` | 신뢰도 카드 (`kspo-trust-card/0.1`, AI·프로그램용) |
 | `data/calendar_2025.csv` | 2025 올림픽공원 통합 공연 달력 (KOPIS + KSPO, 121건) |
