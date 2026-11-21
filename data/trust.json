@@ -130,7 +130,10 @@
             "state": "empty",
             "total": 0
           }
-        ]
+        ],
+        "last_try": "2026-11-21",
+        "last_try_state": "error",
+        "last_try_msg": "HTTP 502"
       }
     },
     {
@@ -182,7 +185,10 @@
             "state": "ok",
             "total": 2502
           }
-        ]
+        ],
+        "last_try": "2026-11-21",
+        "last_try_state": "error",
+        "last_try_msg": "HTTP 502"
       }
     },
     {
@@ -232,7 +238,10 @@
             "state": "ok",
             "total": 56772
           }
-        ]
+        ],
+        "last_try": "2026-11-21",
+        "last_try_state": "error",
+        "last_try_msg": "HTTP 502"
       }
     },
     {
@@ -374,5 +383,5 @@
       ]
     }
   ],
-  "monitored_at": "2026-11-19"
+  "monitored_at": "2026-11-21"
 }
