@@ -38,6 +38,7 @@ async function call(api, key) {
 // 응답 → { state, total, latest, msg }
 function judge(res) {
   if (res.status === 401 || res.status === 403) return { state: 'key_error', msg: '인증키 거절(' + res.status + ')' };
+  if (res.status >= 500) return { state: 'down', msg: '서버 오류 HTTP ' + res.status }; // 기관 서버 문제: 카드에 기록
   if (res.status !== 200) return { state: 'error', msg: res.status ? 'HTTP ' + res.status : '응답 없음' };
   const a = Checks.parseApi(res.text);
   if (!a) return { state: 'error', msg: 'XML·JSON 응답이 아님' };
@@ -56,7 +57,12 @@ function autoIssues(ds, now, prev) {
   const out = [];
   const before = prev && prev.total != null ? fmt(prev.total) + '건(' + (prev.checked_at || '이전 수집') + ')' : null;
   const lastFull = ((prev && prev.history) || []).filter((h) => h.total > 0).pop();
-  if (now.state === 'empty') {
+  if (now.state === 'down') {
+    out.push({ rule: 'A8', severity: 'medium', title: 'API가 응답하지 않음', auto: true,
+      detail: today + ' 자동 확인: 기관 서버가 오류(' + now.msg + ')를 돌려줘 데이터를 받을 수 없었습니다.' +
+        (prev && prev.state === 'empty' ? ' 직전 확인(' + prev.checked_at + ')에는 0건이었습니다.' : ''),
+      advice: '잠시 뒤 다시 시도하거나, 예시 파일과 보완 데이터를 쓰세요.' });
+  } else if (now.state === 'empty') {
     out.push({ rule: 'A8', severity: 'high', title: 'API가 0건을 돌려줌', auto: true,
       detail: today + ' 자동 확인: 정상 응답이지만 전체 건수(totalCount)가 0입니다.' +
         (lastFull ? ' 마지막으로 데이터가 있던 확인은 ' + lastFull.date + '(' + fmt(lastFull.total) + '건)입니다.' : ''),
@@ -105,7 +111,7 @@ function autoIssues(ds, now, prev) {
     ds.issues = ds.issues.filter((i) => !i.auto).concat(autoIssues(ds, now, prev));
     ds.issues.sort((x, y) => order[x.severity] - order[y.severity]);
     const hist = ((prev && prev.history) || []).concat([{ date: today, state: now.state, total: now.total }]).slice(-26);
-    ds.monitor = { checked_at: today, state: now.state, total: now.total, latest: now.latest, history: hist };
+    ds.monitor = { checked_at: today, state: now.state, total: now.state === 'down' ? (prev && prev.total) : now.total, latest: now.latest, history: hist };
   }
   trust.monitored_at = today;
   fs.writeFileSync(TRUST, JSON.stringify(trust, null, 2) + '\n');
